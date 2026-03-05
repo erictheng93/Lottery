@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #2a3040 transparent;
+  }
+
+  ::selection {
+    background: #22d3ee33;
+    color: #fff;
+  }
+}
+
+@layer components {
+  .glass {
+    background: rgba(15, 18, 24, 0.85);
+    backdrop-filter: blur(20px) saturate(1.4);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+}
+
+@layer utilities {
+  .fade-in {
+    animation: fadeIn 0.3s ease-out both;
+  }
+
+  .slide-up {
+    animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
