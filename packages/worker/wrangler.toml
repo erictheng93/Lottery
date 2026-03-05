@@ -1,0 +1,20 @@
+name = "lottery-worker"
+main = "src/index.ts"
+compatibility_date = "2025-03-01"
+
+[triggers]
+crons = ["* * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lottery-db"
+database_id = "placeholder-replace-with-actual-id"
+
+[[kv_namespaces]]
+binding = "CSRF_CACHE"
+id = "placeholder-replace-with-actual-id"
+
+[vars]
+SOURCE_BASE_URL = "https://open-lat.inja777.com"
+PLAYKEY = "WN2WSJLHC"
+PTYPE = "LHC"

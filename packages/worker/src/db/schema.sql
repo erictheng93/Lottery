@@ -1,0 +1,30 @@
+CREATE TABLE IF NOT EXISTS draw_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    period_id TEXT NOT NULL UNIQUE,
+    draw_time DATETIME NOT NULL,
+    num1 INTEGER NOT NULL,
+    num2 INTEGER NOT NULL,
+    num3 INTEGER NOT NULL,
+    num4 INTEGER NOT NULL,
+    num5 INTEGER NOT NULL,
+    digits TEXT NOT NULL,
+    raw_data TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_draw_time_desc ON draw_results(draw_time DESC);
+
+CREATE TABLE IF NOT EXISTS stats_cache (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME
+);
+
+CREATE TABLE IF NOT EXISTS scrape_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    status TEXT NOT NULL,
+    period_id TEXT,
+    message TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

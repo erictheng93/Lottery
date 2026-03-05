@@ -1,0 +1,11 @@
+{
+  "name": "lottery-stats",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --filter worker dev",
+    "db:init:local": "bun run --filter worker db:init:local"
+  }
+}
