@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { Env } from './types';
-import { scrape } from './scraper';
+import { scrape, backfill } from './scraper';
 import { getStats, parseRange } from './stats';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -102,6 +102,13 @@ app.get('/api/draws', async (c) => {
 app.get('/api/trigger-scrape', async (c) => {
   await scrape(c.env);
   return c.json({ triggered: true });
+});
+
+app.get('/api/trigger-backfill', async (c) => {
+  const range = Number(c.req.query('range')) || 100;
+  const clamped = Math.min(Math.max(range, 30), 100);
+  const result = await backfill(c.env, clamped);
+  return c.json(result);
 });
 
 export default {

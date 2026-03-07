@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import StatsBar from '@/components/StatsBar.vue';
+import OmissionCards from '@/components/OmissionCards.vue';
 import DrawTable from '@/components/DrawTable.vue';
 </script>
 
@@ -23,6 +24,7 @@ import DrawTable from '@/components/DrawTable.vue';
       </header>
 
       <StatsBar />
+      <OmissionCards />
       <DrawTable />
     </div>
   </div>

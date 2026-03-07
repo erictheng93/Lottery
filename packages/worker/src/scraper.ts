@@ -1,4 +1,4 @@
-import type { Env, AjaxInfoResponse, CsrfData } from './types';
+import type { Env, AjaxInfoResponse, AjaxOtherInfoResponse, InitListItem, CsrfData } from './types';
 
 const CSRF_KV_KEY = 'csrf_data';
 const CSRF_TTL_SECONDS = 600; // 10 minutes
@@ -152,4 +152,119 @@ export async function scrape(env: Env): Promise<void> {
     .run();
 
   await writeScrapeLog(env, 'success', periodId, null);
+}
+
+async function fetchHistoricalDraws(
+  env: Env,
+  csrf: CsrfData,
+  range: number
+): Promise<AjaxOtherInfoResponse> {
+  const url = `${env.SOURCE_BASE_URL}/ajax_other_info`;
+  const body = new URLSearchParams({
+    playkey: env.PLAYKEY,
+    page: 'nowopen',
+    range: String(range),
+    date: '',
+    type: 'range',
+    _token: csrf.token,
+  });
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Cookie: csrf.cookie,
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+    body: body.toString(),
+  });
+
+  if (res.status === 419) {
+    throw new Error('CSRF_EXPIRED');
+  }
+  if (!res.ok) {
+    throw new Error(`ajax_other_info returned ${res.status}`);
+  }
+
+  return res.json();
+}
+
+export interface BackfillResult {
+  inserted: number;
+  skipped: number;
+  errors: number;
+  total: number;
+}
+
+export async function backfill(env: Env, range: number): Promise<BackfillResult> {
+  let csrf: CsrfData;
+  try {
+    csrf = await getCsrfToken(env);
+  } catch {
+    csrf = await refreshCsrfToken(env);
+  }
+
+  let raw: AjaxOtherInfoResponse;
+  try {
+    raw = await fetchHistoricalDraws(env, csrf, range);
+  } catch (e) {
+    if (e instanceof Error && e.message === 'CSRF_EXPIRED') {
+      csrf = await refreshCsrfToken(env);
+      raw = await fetchHistoricalDraws(env, csrf, range);
+    } else {
+      throw e;
+    }
+  }
+
+  if (raw.isData !== '1') {
+    return { inserted: 0, skipped: 0, errors: 0, total: 0 };
+  }
+
+  const items: InitListItem[] = JSON.parse(raw.initlist);
+  let inserted = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  for (const item of items) {
+    const periodId = item.preDrawIssue;
+    const numbers = item.preDrawCode.map(Number);
+    const digits = numbers.map((n) => n % 10);
+    const drawTime = item.preDrawTime.replace('<br>', 'T');
+
+    try {
+      const result = await env.DB.prepare(
+        `INSERT OR IGNORE INTO draw_results (period_id, draw_time, num1, num2, num3, num4, num5, digits, raw_data)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+        .bind(
+          periodId,
+          drawTime,
+          numbers[0],
+          numbers[1],
+          numbers[2],
+          numbers[3],
+          numbers[4],
+          digits.join(','),
+          JSON.stringify(item)
+        )
+        .run();
+
+      if (result.meta.changes > 0) {
+        inserted++;
+      } else {
+        skipped++;
+      }
+    } catch {
+      errors++;
+    }
+  }
+
+  await writeScrapeLog(
+    env,
+    'success',
+    null,
+    `Backfill range=${range}: ${inserted} inserted, ${skipped} skipped, ${errors} errors`
+  );
+
+  return { inserted, skipped, errors, total: items.length };
 }

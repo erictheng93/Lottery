@@ -20,3 +20,16 @@ export interface CsrfData {
   token: string;
   cookie: string;
 }
+
+export interface InitListItem {
+  preDrawCode: string[];
+  preDrawIssue: string;
+  preDrawTime: string; // contains <br>, e.g. "2026-03-05<br>17:51:47"
+}
+
+export interface AjaxOtherInfoResponse {
+  playkey: string;
+  isData: string;
+  ptype: string;
+  initlist: string; // JSON string — needs double parse
+}
