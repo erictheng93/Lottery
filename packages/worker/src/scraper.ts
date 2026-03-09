@@ -1,10 +1,13 @@
-import type { Env, AjaxInfoResponse, AjaxOtherInfoResponse, InitListItem, CsrfData } from './types';
+import { GAMES, type Env, type GameConfig, type AjaxInfoResponse, type AjaxOtherInfoResponse, type InitListItem, type CsrfData } from './types';
 
 const CSRF_KV_KEY = 'csrf_data';
-const CSRF_TTL_SECONDS = 600; // 10 minutes
+const CSRF_TTL_SECONDS = 600;
+const FETCH_TIMEOUT_MS = 15_000;
+
+// --- CSRF Management ---
 
 async function fetchCsrfFromSource(env: Env): Promise<CsrfData> {
-  const url = `${env.SOURCE_BASE_URL}/nowopen/${env.PLAYKEY}`;
+  const url = `${env.SOURCE_BASE_URL}/nowopen/${GAMES[0].playkey}`;
   const res = await fetch(url);
   const html = await res.text();
 
@@ -39,155 +42,170 @@ async function refreshCsrfToken(env: Env): Promise<CsrfData> {
   return data;
 }
 
-async function fetchLatestDraw(
-  env: Env,
-  csrf: CsrfData
-): Promise<AjaxInfoResponse> {
+// --- Fetch with Timeout ---
+
+async function fetchWithTimeout(input: RequestInfo, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// --- Single Game Scrape ---
+
+interface ScrapeGameResult {
+  game: GameConfig;
+  status: 'success' | 'skip' | 'csrf_expired' | 'error';
+  periodId: string | null;
+  message: string | null;
+}
+
+async function scrapeOneGame(env: Env, game: GameConfig, csrf: CsrfData): Promise<ScrapeGameResult> {
   const url = `${env.SOURCE_BASE_URL}/ajax_info`;
   const body = new URLSearchParams({
-    playkey: env.PLAYKEY,
-    ptype: env.PTYPE,
+    playkey: game.playkey,
+    ptype: game.ptype,
     _token: csrf.token,
   });
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Cookie: csrf.cookie,
-      'X-Requested-With': 'XMLHttpRequest',
+  const res = await fetchWithTimeout(
+    url,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Cookie: csrf.cookie,
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: body.toString(),
     },
-    body: body.toString(),
-  });
+    FETCH_TIMEOUT_MS
+  );
 
   if (res.status === 419) {
-    throw new Error('CSRF_EXPIRED');
+    return { game, status: 'csrf_expired', periodId: null, message: 'CSRF token expired (419)' };
   }
   if (!res.ok) {
-    throw new Error(`ajax_info returned ${res.status}`);
+    return { game, status: 'error', periodId: null, message: `ajax_info returned ${res.status}` };
   }
 
-  return res.json();
-}
-
-async function writeScrapeLog(
-  env: Env,
-  status: string,
-  periodId: string | null,
-  message: string | null
-) {
-  await env.DB.prepare(
-    'INSERT INTO scrape_log (status, period_id, message) VALUES (?, ?, ?)'
-  )
-    .bind(status, periodId, message)
-    .run();
-}
-
-export async function scrape(env: Env): Promise<void> {
-  let csrf: CsrfData;
-  try {
-    csrf = await getCsrfToken(env);
-  } catch (e) {
-    await writeScrapeLog(env, 'error', null, `CSRF fetch failed: ${e}`);
-    return;
-  }
-
-  let data: AjaxInfoResponse;
-  try {
-    data = await fetchLatestDraw(env, csrf);
-  } catch (e) {
-    if (e instanceof Error && e.message === 'CSRF_EXPIRED') {
-      // Retry once with fresh token
-      try {
-        csrf = await refreshCsrfToken(env);
-        data = await fetchLatestDraw(env, csrf);
-      } catch (retryErr) {
-        await writeScrapeLog(
-          env,
-          'error',
-          null,
-          `Retry after CSRF refresh failed: ${retryErr}`
-        );
-        return;
-      }
-    } else {
-      await writeScrapeLog(env, 'error', null, `ajax_info failed: ${e}`);
-      return;
-    }
-  }
-
-  const periodId = data!.nowPeriod;
-  const numbers = data!.openlotNumber.map(Number);
+  const data: AjaxInfoResponse = await res.json();
+  const periodId = data.nowPeriod;
+  const numbers = data.openlotNumber.map(Number);
   const digits = numbers.map((n) => n % 10);
 
-  // Check if already exists
   const existing = await env.DB.prepare(
-    'SELECT id FROM draw_results WHERE period_id = ?'
+    'SELECT id FROM draw_results WHERE game_id = ? AND period_id = ?'
   )
-    .bind(periodId)
+    .bind(game.id, periodId)
     .first();
 
   if (existing) {
-    await writeScrapeLog(env, 'skip', periodId, 'Already exists');
-    return;
+    return { game, status: 'skip', periodId, message: 'Already exists' };
   }
 
-  // Insert new draw result
   const drawTime = new Date().toISOString();
   await env.DB.prepare(
-    `INSERT INTO draw_results (period_id, draw_time, num1, num2, num3, num4, num5, digits, raw_data)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO draw_results (game_id, period_id, draw_time, numbers, digits, raw_data)
+     VALUES (?, ?, ?, ?, ?, ?)`
   )
     .bind(
+      game.id,
       periodId,
       drawTime,
-      numbers[0],
-      numbers[1],
-      numbers[2],
-      numbers[3],
-      numbers[4],
+      JSON.stringify(numbers),
       digits.join(','),
       JSON.stringify(data)
     )
     .run();
 
-  await writeScrapeLog(env, 'success', periodId, null);
+  return { game, status: 'success', periodId, message: null };
 }
 
-async function fetchHistoricalDraws(
+// --- Write Log ---
+
+async function writeScrapeLog(
   env: Env,
-  csrf: CsrfData,
-  range: number
-): Promise<AjaxOtherInfoResponse> {
-  const url = `${env.SOURCE_BASE_URL}/ajax_other_info`;
-  const body = new URLSearchParams({
-    playkey: env.PLAYKEY,
-    page: 'nowopen',
-    range: String(range),
-    date: '',
-    type: 'range',
-    _token: csrf.token,
-  });
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Cookie: csrf.cookie,
-      'X-Requested-With': 'XMLHttpRequest',
-    },
-    body: body.toString(),
-  });
-
-  if (res.status === 419) {
-    throw new Error('CSRF_EXPIRED');
-  }
-  if (!res.ok) {
-    throw new Error(`ajax_other_info returned ${res.status}`);
-  }
-
-  return res.json();
+  gameId: string,
+  status: string,
+  periodId: string | null,
+  message: string | null
+) {
+  await env.DB.prepare(
+    'INSERT INTO scrape_log (game_id, status, period_id, message) VALUES (?, ?, ?, ?)'
+  )
+    .bind(gameId, status, periodId, message)
+    .run();
 }
+
+// --- Main: Scrape All Games ---
+
+export async function scrapeAll(env: Env): Promise<void> {
+  // 1. Get CSRF token (shared across all games)
+  let csrf: CsrfData;
+  try {
+    csrf = await getCsrfToken(env);
+  } catch (e) {
+    await writeScrapeLog(env, '*', 'error', null, `CSRF fetch failed: ${e}`);
+    return;
+  }
+
+  // 2. Scrape all games in parallel with Promise.allSettled
+  const results = await Promise.allSettled(
+    GAMES.map((game) => scrapeOneGame(env, game, csrf))
+  );
+
+  // 3. Process results, collect 419 failures for retry
+  const csrfExpiredGames: GameConfig[] = [];
+
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i];
+    if (result.status === 'fulfilled') {
+      const r = result.value;
+      await writeScrapeLog(env, r.game.id, r.status, r.periodId, r.message);
+      if (r.status === 'csrf_expired') {
+        csrfExpiredGames.push(r.game);
+      }
+    } else {
+      const errorMsg = result.reason instanceof Error ? result.reason.message : String(result.reason);
+      const game = GAMES[i];
+      await writeScrapeLog(env, game.id, 'error', null, `Fetch failed: ${errorMsg}`);
+    }
+  }
+
+  // 4. If any games got 419, refresh CSRF and retry only those
+  if (csrfExpiredGames.length > 0) {
+    try {
+      csrf = await refreshCsrfToken(env);
+    } catch (e) {
+      for (const game of csrfExpiredGames) {
+        await writeScrapeLog(env, game.id, 'error', null, `CSRF refresh failed on retry: ${e}`);
+      }
+      return;
+    }
+
+    const retryResults = await Promise.allSettled(
+      csrfExpiredGames.map((game) => scrapeOneGame(env, game, csrf))
+    );
+
+    for (let i = 0; i < retryResults.length; i++) {
+      const result = retryResults[i];
+      if (result.status === 'fulfilled') {
+        const r = result.value;
+        await writeScrapeLog(env, r.game.id, r.status, r.periodId, r.message);
+      } else {
+        const errorMsg = result.reason instanceof Error ? result.reason.message : String(result.reason);
+        const game = csrfExpiredGames[i];
+        await writeScrapeLog(env, game.id, 'error', null, `Retry failed: ${errorMsg}`);
+      }
+    }
+  }
+}
+
+// --- Backfill (per-game) ---
 
 export interface BackfillResult {
   inserted: number;
@@ -196,7 +214,7 @@ export interface BackfillResult {
   total: number;
 }
 
-export async function backfill(env: Env, range: number): Promise<BackfillResult> {
+export async function backfill(env: Env, game: GameConfig, range: number): Promise<BackfillResult> {
   let csrf: CsrfData;
   try {
     csrf = await getCsrfToken(env);
@@ -204,13 +222,43 @@ export async function backfill(env: Env, range: number): Promise<BackfillResult>
     csrf = await refreshCsrfToken(env);
   }
 
+  const fetchHistory = async (c: CsrfData): Promise<AjaxOtherInfoResponse> => {
+    const url = `${env.SOURCE_BASE_URL}/ajax_other_info`;
+    const body = new URLSearchParams({
+      playkey: game.playkey,
+      page: 'nowopen',
+      range: String(range),
+      date: '',
+      type: 'range',
+      _token: c.token,
+    });
+
+    const res = await fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Cookie: c.cookie,
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: body.toString(),
+      },
+      FETCH_TIMEOUT_MS
+    );
+
+    if (res.status === 419) throw new Error('CSRF_EXPIRED');
+    if (!res.ok) throw new Error(`ajax_other_info returned ${res.status}`);
+    return res.json();
+  };
+
   let raw: AjaxOtherInfoResponse;
   try {
-    raw = await fetchHistoricalDraws(env, csrf, range);
+    raw = await fetchHistory(csrf);
   } catch (e) {
     if (e instanceof Error && e.message === 'CSRF_EXPIRED') {
       csrf = await refreshCsrfToken(env);
-      raw = await fetchHistoricalDraws(env, csrf, range);
+      raw = await fetchHistory(csrf);
     } else {
       throw e;
     }
@@ -233,17 +281,14 @@ export async function backfill(env: Env, range: number): Promise<BackfillResult>
 
     try {
       const result = await env.DB.prepare(
-        `INSERT OR IGNORE INTO draw_results (period_id, draw_time, num1, num2, num3, num4, num5, digits, raw_data)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT OR IGNORE INTO draw_results (game_id, period_id, draw_time, numbers, digits, raw_data)
+         VALUES (?, ?, ?, ?, ?, ?)`
       )
         .bind(
+          game.id,
           periodId,
           drawTime,
-          numbers[0],
-          numbers[1],
-          numbers[2],
-          numbers[3],
-          numbers[4],
+          JSON.stringify(numbers),
           digits.join(','),
           JSON.stringify(item)
         )
@@ -261,6 +306,7 @@ export async function backfill(env: Env, range: number): Promise<BackfillResult>
 
   await writeScrapeLog(
     env,
+    game.id,
     'success',
     null,
     `Backfill range=${range}: ${inserted} inserted, ${skipped} skipped, ${errors} errors`
