@@ -4,7 +4,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "db:init:local": "wrangler d1 execute lottery-db --local --file=src/db/schema.sql"
+    "db:init:local": "wrangler d1 execute lottery-db --local --file=src/db/schema.sql",
+    "db:migrate:local": "wrangler d1 execute lottery-db --local --file=src/db/migrate-v2.sql"
   },
   "dependencies": {
     "hono": "^4.7.0"
