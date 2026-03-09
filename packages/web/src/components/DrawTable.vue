@@ -5,11 +5,22 @@ import { useDraws } from '@/composables/useDraws';
 const props = defineProps<{ game: string }>();
 const { draws, total, hasMore, offset, loading, error, reload, prevPage, nextPage } = useDraws(toRef(props, 'game'));
 
-function digitColor(d: number, digits: number[]): string {
-  // Highlight digits that appear more than once in same draw
-  const count = digits.filter((x) => x === d).length;
-  if (count > 1) return 'text-accent font-bold';
-  return 'text-gray-600 dark:text-gray-300';
+// Each digit 0-9 gets a unique background color with contrasting text
+const digitStyles: Record<number, string> = {
+  0: 'bg-red-500 ring-red-400/30 text-white',
+  1: 'bg-orange-500 ring-orange-400/30 text-white',
+  2: 'bg-amber-500 ring-amber-400/30 text-white',
+  3: 'bg-yellow-400 ring-yellow-300/30 text-gray-900',
+  4: 'bg-green-500 ring-green-400/30 text-white',
+  5: 'bg-teal-500 ring-teal-400/30 text-white',
+  6: 'bg-cyan-500 ring-cyan-400/30 text-white',
+  7: 'bg-blue-500 ring-blue-400/30 text-white',
+  8: 'bg-purple-500 ring-purple-400/30 text-white',
+  9: 'bg-pink-500 ring-pink-400/30 text-white',
+};
+
+function digitStyle(d: number): string {
+  return digitStyles[d] ?? 'bg-gray-200 ring-gray-300/30 text-gray-700';
 }
 
 
@@ -92,7 +103,8 @@ function formatTime(iso: string): string {
                   v-for="(num, i) in draw.numbers"
                   :key="i"
                   class="inline-flex items-center justify-center w-6 h-5 sm:w-8 sm:h-7
-                         rounded sm:rounded-md bg-gray-100 dark:bg-base-700/60 font-mono text-[10px] sm:text-xs text-gray-600 dark:text-gray-300 tabular-nums"
+                         rounded sm:rounded-md font-mono text-[10px] sm:text-xs tabular-nums ring-1"
+                  :class="digitStyle(num % 10)"
                 >
                   {{ String(num).padStart(2, '0') }}
                 </span>
@@ -107,8 +119,8 @@ function formatTime(iso: string): string {
                   :key="i"
                   class="inline-flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6
                          rounded-full font-mono text-[9px] sm:text-xs font-semibold tabular-nums
-                         bg-accent/[0.08] ring-1 ring-accent/10"
-                  :class="digitColor(d, draw.digits)"
+                         ring-1"
+                  :class="digitStyle(d)"
                 >
                   {{ d }}
                 </span>
