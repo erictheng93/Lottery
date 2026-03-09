@@ -16,5 +16,3 @@ id = "placeholder-replace-with-actual-id"
 
 [vars]
 SOURCE_BASE_URL = "https://open-lat.inja777.com"
-PLAYKEY = "WN2WSJLHC"
-PTYPE = "LHC"
