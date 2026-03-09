@@ -28,7 +28,7 @@ function formatTime(iso: string): string {
     <div class="px-3 sm:px-5 py-3 sm:py-3.5 border-b border-black/[0.03] dark:border-white/[0.04] flex items-center justify-between">
       <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 tracking-wide uppercase">
         開獎記錄
-        <span class="text-gray-400 dark:text-gray-600 font-normal ml-1.5">{{ total }} 筆</span>
+        <span class="text-gray-500 dark:text-gray-600 font-normal ml-1.5">{{ total }} 筆</span>
       </h2>
 
       <div class="flex items-center gap-2 text-xs">

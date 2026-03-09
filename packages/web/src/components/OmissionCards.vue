@@ -150,7 +150,7 @@ function clampPopover() {
         </div>
 
         <!-- Tap hint -->
-        <span class="hidden sm:inline text-[9px] text-gray-400 dark:text-gray-600 leading-none">
+        <span class="hidden sm:inline text-[9px] text-gray-500 dark:text-gray-600 leading-none">
           {{ activeCard === card.position ? '收起' : '點擊展開' }}
         </span>
 
@@ -198,7 +198,7 @@ function clampPopover() {
 
                 <span
                   v-if="d.last_seen_period"
-                  class="font-mono text-[9px] text-gray-400 dark:text-gray-600 w-[72px] text-right truncate"
+                  class="font-mono text-[9px] text-gray-500 dark:text-gray-600 w-[72px] text-right truncate"
                   :title="d.last_seen_period"
                 >
                   {{ d.last_seen_period }}
