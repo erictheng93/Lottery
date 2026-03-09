@@ -10,15 +10,17 @@ interface DigitStats {
   frequency: number;
   current_gap: number;
   max_gap: number;
+  last_seen_period: string | null;
+}
+
+interface PositionStats {
+  position: number;
+  details: DigitStats[]; // sorted by current_gap desc
 }
 
 export interface StatsResult {
-  summary: {
-    most_omitted_digit: number;
-    most_omitted_gap: number;
-    total_periods: number;
-  };
-  details: DigitStats[];
+  positions: PositionStats[];
+  total_periods: number;
   latest_period: string | null;
   last_update: string;
 }
@@ -32,61 +34,72 @@ export function parseRange(raw: string | undefined): number {
   return 100;
 }
 
-function computeStats(draws: DrawRow[]): DigitStats[] {
-  const frequency = new Array(10).fill(0);
-  const currentGap = new Array(10).fill(-1); // -1 = not yet seen
-  const maxGap = new Array(10).fill(0);
-  const streak = new Array(10).fill(0); // running gap counter
+/**
+ * Compute per-position stats.
+ * Each position (0-4 → num1-num5) is tracked independently.
+ * For each position, only one digit appears per draw, so we track
+ * frequency, current_gap, max_gap, last_seen_period for digits 0-9.
+ */
+function computeStats(draws: DrawRow[]): PositionStats[] {
+  const positions: PositionStats[] = [];
 
-  // draws[0] is the most recent, iterate from newest to oldest
-  for (let i = 0; i < draws.length; i++) {
-    const digits = draws[i].digits.split(',').map(Number);
-    const seen = new Set<number>();
+  for (let pos = 0; pos < 5; pos++) {
+    const frequency = new Array(10).fill(0);
+    const currentGap = new Array(10).fill(-1);
+    const maxGap = new Array(10).fill(0);
+    const streak = new Array(10).fill(0);
+    const lastSeenPeriod: (string | null)[] = new Array(10).fill(null);
 
-    for (const d of digits) {
+    // draws[0] is most recent, iterate newest → oldest
+    for (let i = 0; i < draws.length; i++) {
+      const allDigits = draws[i].digits.split(',').map(Number);
+      const d = allDigits[pos]; // single digit for this position
+
       frequency[d]++;
-      seen.add(d);
-    }
 
-    for (let d = 0; d < 10; d++) {
-      if (seen.has(d)) {
-        if (currentGap[d] === -1) {
-          currentGap[d] = i; // periods since last appearance
+      // Update the seen digit
+      if (currentGap[d] === -1) {
+        currentGap[d] = i;
+        lastSeenPeriod[d] = draws[i].period_id;
+      }
+      if (streak[d] > maxGap[d]) {
+        maxGap[d] = streak[d];
+      }
+      streak[d] = 0;
+
+      // Increment streak for all other digits
+      for (let other = 0; other < 10; other++) {
+        if (other !== d) {
+          streak[other]++;
         }
-        if (streak[d] > maxGap[d]) {
-          maxGap[d] = streak[d];
-        }
-        streak[d] = 0;
-      } else {
-        streak[d]++;
       }
     }
-  }
 
-  // Finalize: digits never seen have current_gap = total draws
-  // Also check if the final streak is the max
-  for (let d = 0; d < 10; d++) {
-    if (currentGap[d] === -1) {
-      currentGap[d] = draws.length;
+    // Finalize
+    const details: DigitStats[] = [];
+    for (let d = 0; d < 10; d++) {
+      if (currentGap[d] === -1) {
+        currentGap[d] = draws.length;
+      }
+      if (streak[d] > maxGap[d]) {
+        maxGap[d] = streak[d];
+      }
+      details.push({
+        digit: d,
+        frequency: frequency[d],
+        current_gap: currentGap[d],
+        max_gap: maxGap[d],
+        last_seen_period: lastSeenPeriod[d],
+      });
     }
-    if (streak[d] > maxGap[d]) {
-      maxGap[d] = streak[d];
-    }
+
+    // Sort by current_gap descending
+    details.sort((a, b) => b.current_gap - a.current_gap);
+
+    positions.push({ position: pos + 1, details });
   }
 
-  const result: DigitStats[] = [];
-  for (let d = 0; d < 10; d++) {
-    result.push({
-      digit: d,
-      frequency: frequency[d],
-      current_gap: currentGap[d],
-      max_gap: maxGap[d],
-    });
-  }
-
-  // Sort by current_gap descending
-  result.sort((a, b) => b.current_gap - a.current_gap);
-  return result;
+  return positions;
 }
 
 export async function getStats(env: Env, range: number): Promise<StatsResult> {
@@ -104,22 +117,17 @@ export async function getStats(env: Env, range: number): Promise<StatsResult> {
 
   // 2. Compute fresh
   const draws = await env.DB.prepare(
-    'SELECT period_id, digits FROM draw_results ORDER BY id DESC LIMIT ?'
+    'SELECT period_id, digits FROM draw_results ORDER BY period_id DESC LIMIT ?'
   )
     .bind(range)
     .all<DrawRow>();
 
   const rows = draws.results;
-  const details = computeStats(rows);
-  const mostOmitted = details[0];
+  const positions = computeStats(rows);
 
   const result: StatsResult = {
-    summary: {
-      most_omitted_digit: mostOmitted?.digit ?? 0,
-      most_omitted_gap: mostOmitted?.current_gap ?? 0,
-      total_periods: rows.length,
-    },
-    details,
+    positions,
+    total_periods: rows.length,
     latest_period: rows.length > 0 ? rows[0].period_id : null,
     last_update: new Date().toISOString(),
   };

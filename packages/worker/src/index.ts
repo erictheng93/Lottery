@@ -10,7 +10,7 @@ app.use('/api/*', cors());
 
 app.get('/api/health', async (c) => {
   const latest = await c.env.DB.prepare(
-    'SELECT period_id, created_at FROM draw_results ORDER BY id DESC LIMIT 1'
+    'SELECT period_id, created_at FROM draw_results ORDER BY period_id DESC LIMIT 1'
   ).first<{ period_id: string; created_at: string }>();
 
   const totalResult = await c.env.DB.prepare(
@@ -71,7 +71,7 @@ app.get('/api/draws', async (c) => {
   const rows = await c.env.DB.prepare(
     `SELECT period_id, draw_time, num1, num2, num3, num4, num5, digits
      FROM draw_results ${whereClause}
-     ORDER BY id DESC LIMIT ? OFFSET ?`
+     ORDER BY period_id DESC LIMIT ? OFFSET ?`
   )
     .bind(...params, limit, offset)
     .all<{

@@ -5,15 +5,17 @@ export interface DigitDetail {
   frequency: number;
   current_gap: number;
   max_gap: number;
+  last_seen_period: string | null;
+}
+
+export interface PositionStats {
+  position: number;
+  details: DigitDetail[]; // sorted by current_gap desc
 }
 
 export interface StatsResponse {
-  summary: {
-    most_omitted_digit: number;
-    most_omitted_gap: number;
-    total_periods: number;
-  };
-  details: DigitDetail[];
+  positions: PositionStats[];
+  total_periods: number;
   latest_period: string | null;
   last_update: string;
 }

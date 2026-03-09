@@ -3,9 +3,6 @@ import { fetchStats, type StatsResponse } from '@/api';
 
 const POLL_INTERVAL = 30_000;
 
-/** Number of digits drawn per game (539 = 5, change for other games) */
-export const DRAW_COUNT = 5;
-
 // Shared state — singleton across all components
 const range = ref(100);
 const data = ref<StatsResponse | null>(null);
