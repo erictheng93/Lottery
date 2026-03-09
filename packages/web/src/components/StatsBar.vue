@@ -3,7 +3,7 @@ import { computed, toRef } from 'vue';
 import { useStats } from '@/composables/useStats';
 
 const props = defineProps<{ game: string }>();
-const { data, loading } = useStats(toRef(props, 'game'));
+const { data, loading, error } = useStats(toRef(props, 'game'));
 
 const topOmission = computed(() => {
   if (!data.value) return null;
@@ -29,8 +29,8 @@ const topOmission = computed(() => {
     </span>
 
     <template v-if="data && topOmission">
-      <span class="text-sm text-gray-400 dark:text-gray-400">遺漏最大</span>
-      <span class="text-sm text-gray-500 dark:text-gray-500">
+      <span class="text-sm text-gray-500 dark:text-gray-400">遺漏最大</span>
+      <span class="text-sm text-gray-600 dark:text-gray-500">
         第{{ topOmission.position }}球
       </span>
       <span class="font-mono font-bold text-lg tabular-nums" :class="
@@ -42,7 +42,7 @@ const topOmission = computed(() => {
       ">
         {{ topOmission.digit }}
       </span>
-      <span class="text-sm text-gray-500 dark:text-gray-500">
+      <span class="text-sm text-gray-600 dark:text-gray-500">
         已
         <span class="font-mono font-semibold text-gray-700 dark:text-gray-300">{{ topOmission.gap }}</span>
         期未出現
@@ -50,7 +50,11 @@ const topOmission = computed(() => {
     </template>
 
     <template v-else-if="loading">
-      <span class="text-sm text-gray-500">載入中...</span>
+      <span class="text-sm text-gray-500 dark:text-gray-500">載入中...</span>
+    </template>
+
+    <template v-else-if="error">
+      <span class="text-sm text-red-500 dark:text-red-400">連線異常，稍後重試</span>
     </template>
   </div>
 </template>

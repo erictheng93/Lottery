@@ -7,8 +7,9 @@ const { theme, toggleTheme } = useTheme();
 <template>
   <button
     @click="toggleTheme"
-    class="relative w-10 h-10 flex items-center justify-center rounded-xl bg-gray-200/60 dark:bg-base-800/50 border border-black/[0.06] dark:border-white/[0.06] hover:border-accent/30 transition-all duration-300 group overflow-hidden"
+    class="relative w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center rounded-xl bg-gray-200/60 dark:bg-base-800/50 border border-black/[0.06] dark:border-white/[0.06] hover:border-accent/30 active:scale-95 transition-all duration-300 group overflow-hidden"
     :title="theme === 'light' ? '切換至深色模式' : '切換至淺色模式'"
+    :aria-label="theme === 'light' ? '切換至深色模式' : '切換至淺色模式'"
   >
     <div class="relative w-5 h-5 transition-transform duration-500" :class="theme === 'light' ? 'rotate-90' : 'rotate-0'">
       <!-- Sun icon -->

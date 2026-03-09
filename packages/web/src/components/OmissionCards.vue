@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, toRef } from 'vue';
+import { computed, ref, toRef, nextTick } from 'vue';
 import { useStats } from '@/composables/useStats';
 
-const props = defineProps<{ game: string }>();
-const { data, loading } = useStats(toRef(props, 'game'));
+const props = defineProps<{ game: string; numCount?: number }>();
+const { data, loading, error } = useStats(toRef(props, 'game'));
 
 /** For each position, the most omitted digit (details[0]) */
 const positionCards = computed(() => {
@@ -30,9 +30,35 @@ function gapClass(gap: number): string {
 
 // Per-card toggle state
 const activeCard = ref<number | null>(null);
+const cardsContainer = ref<HTMLElement | null>(null);
 
 function onCardTap(position: number) {
   activeCard.value = activeCard.value === position ? null : position;
+  if (activeCard.value !== null) {
+    nextTick(clampPopover);
+  }
+}
+
+/** Clamp active popover so it doesn't overflow the viewport */
+function clampPopover() {
+  if (!cardsContainer.value) return;
+  const popover = cardsContainer.value.querySelector('.card-popover') as HTMLElement | null;
+  if (!popover) return;
+
+  // Reset any previous clamping
+  popover.style.left = '';
+  popover.style.transform = '';
+
+  const rect = popover.getBoundingClientRect();
+  const padding = 8;
+
+  if (rect.left < padding) {
+    const shift = padding - rect.left;
+    popover.style.left = `calc(50% + ${shift}px)`;
+  } else if (rect.right > window.innerWidth - padding) {
+    const shift = rect.right - (window.innerWidth - padding);
+    popover.style.left = `calc(50% - ${shift}px)`;
+  }
 }
 </script>
 
@@ -40,7 +66,7 @@ function onCardTap(position: number) {
   <div class="glass rounded-xl px-3 sm:px-5 py-4 overflow-visible relative z-10">
     <!-- Header -->
     <div class="flex items-center justify-between mb-3">
-      <h2 class="text-xs font-semibold text-gray-400 dark:text-gray-500 tracking-wide uppercase">
+      <h2 class="text-xs font-semibold text-gray-500 dark:text-gray-500 tracking-wide uppercase">
         各球遺漏最久
       </h2>
       <span v-if="data" class="text-[10px] text-gray-500 dark:text-gray-600 font-mono">
@@ -52,20 +78,24 @@ function onCardTap(position: number) {
     <!-- Loading skeleton -->
     <div v-if="!data && loading" class="flex justify-center gap-3">
       <div
-        v-for="i in 5"
+        v-for="i in (numCount ?? 5)"
         :key="i"
         class="flex-1 max-w-[88px] h-[104px] rounded-xl bg-gray-100 dark:bg-base-800 animate-pulse"
       />
+    </div>
 
+    <!-- Error state -->
+    <div v-else-if="error && !data" class="text-center py-6">
+      <p class="text-sm text-red-500 dark:text-red-400">統計資料載入失敗</p>
     </div>
 
     <!-- Cards -->
-    <div v-else-if="data" class="flex flex-wrap justify-center gap-1.5 sm:gap-2 md:gap-3 overflow-visible">
+    <div v-else-if="data" ref="cardsContainer" class="flex flex-wrap justify-center gap-1.5 sm:gap-2 md:gap-3 overflow-visible">
       <div
         v-for="(card, i) in positionCards"
         :key="card.position"
         class="omission-card relative flex-1 min-w-[54px] sm:min-w-[75px] max-w-[88px] rounded-xl border px-1 sm:px-1.5 md:px-2 py-2 md:py-3
-               flex flex-col items-center gap-1.5 md:gap-2 transition-all duration-300 hover:scale-[1.04] cursor-pointer"
+               flex flex-col items-center gap-1.5 md:gap-2 transition-all duration-300 hover:scale-[1.04] active:scale-[0.97] cursor-pointer"
 
         :class="{
           'bg-gap-high/[0.06] border-gap-high/20 hover:border-gap-high/40 hover:shadow-[0_0_20px_rgba(239,68,68,0.1)]': gapTier(card.top.current_gap) === 'high',
@@ -76,7 +106,7 @@ function onCardTap(position: number) {
         @click="onCardTap(card.position)"
       >
         <!-- Position label -->
-        <span class="text-[9px] text-gray-500 dark:text-gray-600 uppercase tracking-wide">第{{ card.position }}球</span>
+        <span class="text-[10px] text-gray-500 dark:text-gray-600 uppercase tracking-wide">第{{ card.position }}球</span>
 
 
         <!-- Digit -->
@@ -120,7 +150,7 @@ function onCardTap(position: number) {
         </div>
 
         <!-- Tap hint -->
-        <span class="text-[9px] text-gray-400 dark:text-gray-600 leading-none">
+        <span class="hidden sm:inline text-[9px] text-gray-400 dark:text-gray-600 leading-none">
           {{ activeCard === card.position ? '收起' : '點擊展開' }}
         </span>
 
@@ -136,14 +166,14 @@ function onCardTap(position: number) {
         >
           <div
             v-if="activeCard === card.position"
-            class="absolute z-50 top-full left-1/2 -translate-x-1/2 mt-2 card-popover glass bg-white/95 dark:bg-base-900/95 rounded-xl border border-gray-200 dark:border-white/[0.08] shadow-2xl shadow-black/10 dark:shadow-black/40 p-3 w-[260px]"
+            class="absolute z-50 top-full left-1/2 -translate-x-1/2 mt-2 card-popover glass bg-white/95 dark:bg-base-900/95 rounded-xl border border-gray-200 dark:border-white/[0.08] shadow-2xl shadow-black/10 dark:shadow-black/40 p-3 w-[240px] sm:w-[260px]"
             @click.stop
           >
 
             <!-- Last seen info for this position's most omitted digit -->
             <div class="mb-2 pb-2 border-b border-gray-100 dark:border-white/[0.06] text-center">
 
-              <div class="text-[10px] text-gray-500 tracking-wide mb-1">
+              <div class="text-[10px] text-gray-500 dark:text-gray-500 tracking-wide mb-1">
                 第{{ card.position }}球 · 數字
                 <span class="font-mono font-bold text-accent">{{ card.top.digit }}</span>
                 最後開出
@@ -153,7 +183,7 @@ function onCardTap(position: number) {
 
 
             <!-- Popover header -->
-            <div class="text-[10px] text-gray-500 uppercase tracking-wide mb-2 text-center">
+            <div class="text-[10px] text-gray-500 dark:text-gray-500 uppercase tracking-wide mb-2 text-center">
               第{{ card.position }}球遺漏統計 ({{ data.total_periods }} 期)
             </div>
 

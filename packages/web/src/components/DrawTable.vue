@@ -3,7 +3,7 @@ import { toRef } from 'vue';
 import { useDraws } from '@/composables/useDraws';
 
 const props = defineProps<{ game: string }>();
-const { draws, total, hasMore, offset, loading, prevPage, nextPage } = useDraws(toRef(props, 'game'));
+const { draws, total, hasMore, offset, loading, error, reload, prevPage, nextPage } = useDraws(toRef(props, 'game'));
 
 function digitColor(d: number, digits: number[]): string {
   // Highlight digits that appear more than once in same draw
@@ -25,7 +25,7 @@ function formatTime(iso: string): string {
 <template>
   <div class="glass rounded-xl overflow-hidden">
     <!-- Header -->
-    <div class="px-5 py-3.5 border-b border-black/[0.03] dark:border-white/[0.04] flex items-center justify-between">
+    <div class="px-3 sm:px-5 py-3 sm:py-3.5 border-b border-black/[0.03] dark:border-white/[0.04] flex items-center justify-between">
       <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 tracking-wide uppercase">
         開獎記錄
         <span class="text-gray-400 dark:text-gray-600 font-normal ml-1.5">{{ total }} 筆</span>
@@ -35,27 +35,28 @@ function formatTime(iso: string): string {
         <button
           @click="prevPage"
           :disabled="offset === 0"
-          class="px-3 py-1.5 rounded-md font-medium transition-all duration-200
+          class="px-3 py-2 sm:py-1.5 rounded-md font-medium transition-all duration-200 min-h-[44px] sm:min-h-0 flex items-center
                  disabled:text-gray-300 dark:disabled:text-gray-700 disabled:cursor-not-allowed
-                 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-base-700"
+                 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-base-700
+                 active:bg-gray-200 dark:active:bg-base-600"
         >
           上一頁
         </button>
         <button
           @click="nextPage"
           :disabled="!hasMore"
-          class="px-3 py-1.5 rounded-md font-medium transition-all duration-200
+          class="px-3 py-2 sm:py-1.5 rounded-md font-medium transition-all duration-200 min-h-[44px] sm:min-h-0 flex items-center
                  disabled:text-gray-300 dark:disabled:text-gray-700 disabled:cursor-not-allowed
-                 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-base-700"
+                 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-base-700
+                 active:bg-gray-200 dark:active:bg-base-600"
         >
-
           下一頁
         </button>
       </div>
     </div>
 
     <!-- Loading bar -->
-    <div v-if="loading" class="h-0.5 bg-base-800 overflow-hidden">
+    <div v-if="loading" class="h-0.5 bg-gray-200 dark:bg-base-800 overflow-hidden">
       <div class="h-full w-1/3 bg-accent/50 animate-pulse rounded-full" />
     </div>
 
@@ -63,7 +64,7 @@ function formatTime(iso: string): string {
     <div class="overflow-x-auto">
       <table class="w-full text-sm">
         <thead>
-          <tr class="text-gray-400 dark:text-gray-500 text-[10px] sm:text-xs uppercase tracking-wider border-b border-black/[0.03] dark:border-white/[0.04]">
+          <tr class="text-gray-500 dark:text-gray-500 text-[10px] sm:text-xs uppercase tracking-wider border-b border-black/[0.03] dark:border-white/[0.04]">
             <th class="text-left px-2 sm:px-5 py-2 sm:py-2.5 font-medium whitespace-nowrap">期數</th>
             <th class="text-left px-1.5 sm:px-3 py-2 sm:py-2.5 font-medium whitespace-nowrap">時間</th>
             <th class="text-center px-1.5 sm:px-3 py-2 sm:py-2.5 font-medium whitespace-nowrap">開獎號碼</th>
@@ -81,7 +82,7 @@ function formatTime(iso: string): string {
             <td class="px-2 sm:px-5 py-2 sm:py-2.5 font-mono text-gray-500 dark:text-gray-400 tabular-nums text-[10px] sm:text-xs whitespace-nowrap">
               {{ draw.period_id }}
             </td>
-            <td class="px-1.5 sm:px-3 py-2 sm:py-2.5 font-mono text-gray-400 dark:text-gray-500 tabular-nums text-[10px] sm:text-xs whitespace-nowrap">
+            <td class="px-1.5 sm:px-3 py-2 sm:py-2.5 font-mono text-gray-500 dark:text-gray-500 tabular-nums text-[10px] sm:text-xs whitespace-nowrap">
               {{ formatTime(draw.draw_time) }}
             </td>
 
@@ -115,8 +116,19 @@ function formatTime(iso: string): string {
             </td>
 
           </tr>
-          <tr v-if="draws.length === 0 && !loading">
-            <td colspan="4" class="px-5 py-10 text-center text-gray-600">
+          <tr v-if="error">
+            <td colspan="4" class="px-5 py-10 text-center">
+              <p class="text-red-500 dark:text-red-400 mb-2">載入失敗</p>
+              <button
+                @click="reload"
+                class="text-xs text-accent hover:text-accent/80 underline underline-offset-2 transition-colors"
+              >
+                重新載入
+              </button>
+            </td>
+          </tr>
+          <tr v-else-if="draws.length === 0 && !loading">
+            <td colspan="4" class="px-5 py-10 text-center text-gray-500 dark:text-gray-600">
               暫無數據
             </td>
           </tr>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { fetchGames, type GameInfo } from '@/api';
 import GameSelector from '@/components/GameSelector.vue';
 import StatsBar from '@/components/StatsBar.vue';
@@ -12,6 +12,7 @@ const DEFAULT_GAME = 'wg539b';
 
 const games = ref<GameInfo[]>([]);
 const currentGame = ref(DEFAULT_GAME);
+const gamesError = ref(false);
 
 function readGameFromUrl(): string {
   const params = new URLSearchParams(window.location.search);
@@ -28,22 +29,34 @@ watch(currentGame, (gameId) => {
   writeGameToUrl(gameId);
 });
 
-window.addEventListener('popstate', () => {
+function onPopState() {
   currentGame.value = readGameFromUrl();
-});
+}
 
 onMounted(async () => {
   currentGame.value = readGameFromUrl();
+  window.addEventListener('popstate', onPopState);
   try {
     games.value = await fetchGames();
+    gamesError.value = false;
   } catch {
+    gamesError.value = true;
     games.value = [{ id: DEFAULT_GAME, name: 'WG視訊539 B', numCount: 5 }];
   }
+});
+
+onUnmounted(() => {
+  window.removeEventListener('popstate', onPopState);
+});
+
+const currentNumCount = computed(() => {
+  const g = games.value.find((g) => g.id === currentGame.value);
+  return g?.numCount ?? 5;
 });
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-base-950 text-gray-800 dark:text-gray-200 transition-colors duration-300">
+  <div class="min-h-screen transition-colors duration-300">
     <div class="hidden md:block fixed inset-0 pointer-events-none bg-gradient-to-b from-accent/[0.05] via-transparent to-transparent dark:from-accent/[0.02]" />
 
     <div class="relative max-w-3xl mx-auto px-2 md:px-4 py-4 md:py-6 space-y-3 md:space-y-4">
@@ -69,7 +82,7 @@ onMounted(async () => {
 
 
       <StatsBar :game="currentGame" />
-      <OmissionCards :game="currentGame" />
+      <OmissionCards :game="currentGame" :num-count="currentNumCount" />
       <DrawTable :game="currentGame" />
     </div>
   </div>
