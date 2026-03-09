@@ -1,9 +1,9 @@
-import { ref, onMounted } from 'vue';
+import { ref, watch, onMounted, type Ref } from 'vue';
 import { fetchDraws, type DrawsResponse } from '@/api';
 
 const PAGE_SIZE = 30;
 
-export function useDraws() {
+export function useDraws(game: Ref<string>) {
   const draws = ref<DrawsResponse['draws']>([]);
   const total = ref(0);
   const hasMore = ref(false);
@@ -15,7 +15,7 @@ export function useDraws() {
     loading.value = true;
     error.value = null;
     try {
-      const res = await fetchDraws(PAGE_SIZE, offset.value);
+      const res = await fetchDraws(game.value, PAGE_SIZE, offset.value);
       draws.value = res.draws;
       total.value = res.total;
       hasMore.value = res.has_more;
@@ -37,6 +37,12 @@ export function useDraws() {
     offset.value += PAGE_SIZE;
     load();
   }
+
+  watch(game, () => {
+    offset.value = 0;
+    draws.value = [];
+    load();
+  });
 
   onMounted(() => load());
 

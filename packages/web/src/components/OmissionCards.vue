@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, toRef } from 'vue';
 import { useStats } from '@/composables/useStats';
 
-const { data, loading } = useStats();
+const props = defineProps<{ game: string }>();
+const { data, loading } = useStats(toRef(props, 'game'));
 
 /** For each position, the most omitted digit (details[0]) */
 const positionCards = computed(() => {

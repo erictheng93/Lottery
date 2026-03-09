@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, toRef } from 'vue';
 import { useStats } from '@/composables/useStats';
 
-const { data, loading } = useStats();
+const props = defineProps<{ game: string }>();
+const { data, loading } = useStats(toRef(props, 'game'));
 
-/** Find the single most omitted digit across all 5 positions */
 const topOmission = computed(() => {
   if (!data.value) return null;
   let best: { position: number; digit: number; gap: number } | null = null;
   for (const pos of data.value.positions) {
-    const top = pos.details[0]; // already sorted by current_gap desc
+    const top = pos.details[0];
     if (top && (!best || top.current_gap > best.gap)) {
       best = { position: pos.position, digit: top.digit, gap: top.current_gap };
     }
@@ -20,7 +20,6 @@ const topOmission = computed(() => {
 
 <template>
   <div class="glass rounded-xl px-5 py-3.5 flex items-center gap-3">
-    <!-- Pulse dot -->
     <span class="relative flex h-2.5 w-2.5 shrink-0">
       <span
         v-if="!loading"

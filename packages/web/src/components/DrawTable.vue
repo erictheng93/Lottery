@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { toRef } from 'vue';
 import { useDraws } from '@/composables/useDraws';
 
-const { draws, total, hasMore, offset, loading, prevPage, nextPage } = useDraws();
+const props = defineProps<{ game: string }>();
+const { draws, total, hasMore, offset, loading, prevPage, nextPage } = useDraws(toRef(props, 'game'));
 
 function digitColor(d: number, digits: number[]): string {
   // Highlight digits that appear more than once in same draw
