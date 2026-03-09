@@ -24,8 +24,9 @@ function gapTier(gap: number): 'high' | 'mid' | 'normal' {
 function gapClass(gap: number): string {
   if (gap >= 20) return 'text-gap-high font-bold';
   if (gap >= 10) return 'text-gap-mid font-semibold';
-  return 'text-gray-300';
+  return 'text-gray-600 dark:text-gray-300';
 }
+
 
 // Per-card toggle state
 const activeCard = ref<number | null>(null);
@@ -36,33 +37,36 @@ function onCardTap(position: number) {
 </script>
 
 <template>
-  <div class="glass rounded-xl px-5 py-4 overflow-visible relative z-10">
+  <div class="glass rounded-xl px-3 sm:px-5 py-4 overflow-visible relative z-10">
     <!-- Header -->
     <div class="flex items-center justify-between mb-3">
-      <h2 class="text-xs font-semibold text-gray-500 tracking-wide uppercase">
+      <h2 class="text-xs font-semibold text-gray-400 dark:text-gray-500 tracking-wide uppercase">
         各球遺漏最久
       </h2>
-      <span v-if="data" class="text-[10px] text-gray-600 font-mono">
+      <span v-if="data" class="text-[10px] text-gray-500 dark:text-gray-600 font-mono">
         {{ data.total_periods }} 期
       </span>
     </div>
+
 
     <!-- Loading skeleton -->
     <div v-if="!data && loading" class="flex justify-center gap-3">
       <div
         v-for="i in 5"
         :key="i"
-        class="flex-1 max-w-[88px] h-[104px] rounded-xl bg-base-800 animate-pulse"
+        class="flex-1 max-w-[88px] h-[104px] rounded-xl bg-gray-100 dark:bg-base-800 animate-pulse"
       />
+
     </div>
 
     <!-- Cards -->
-    <div v-else-if="data" class="flex justify-center gap-3 overflow-visible">
+    <div v-else-if="data" class="flex flex-wrap justify-center gap-1.5 sm:gap-2 md:gap-3 overflow-visible">
       <div
         v-for="(card, i) in positionCards"
         :key="card.position"
-        class="omission-card relative flex-1 max-w-[88px] rounded-xl border px-2 py-3
-               flex flex-col items-center gap-2 transition-all duration-300 hover:scale-[1.04] cursor-pointer"
+        class="omission-card relative flex-1 min-w-[54px] sm:min-w-[75px] max-w-[88px] rounded-xl border px-1 sm:px-1.5 md:px-2 py-2 md:py-3
+               flex flex-col items-center gap-1.5 md:gap-2 transition-all duration-300 hover:scale-[1.04] cursor-pointer"
+
         :class="{
           'bg-gap-high/[0.06] border-gap-high/20 hover:border-gap-high/40 hover:shadow-[0_0_20px_rgba(239,68,68,0.1)]': gapTier(card.top.current_gap) === 'high',
           'bg-gap-mid/[0.06] border-gap-mid/20 hover:border-gap-mid/40 hover:shadow-[0_0_20px_rgba(245,158,11,0.1)]': gapTier(card.top.current_gap) === 'mid',
@@ -72,7 +76,8 @@ function onCardTap(position: number) {
         @click="onCardTap(card.position)"
       >
         <!-- Position label -->
-        <span class="text-[9px] text-gray-600 uppercase tracking-wide">第{{ card.position }}球</span>
+        <span class="text-[9px] text-gray-500 dark:text-gray-600 uppercase tracking-wide">第{{ card.position }}球</span>
+
 
         <!-- Digit -->
         <span
@@ -80,11 +85,12 @@ function onCardTap(position: number) {
           :class="{
             'text-gap-high': gapTier(card.top.current_gap) === 'high',
             'text-gap-mid': gapTier(card.top.current_gap) === 'mid',
-            'text-gray-200': gapTier(card.top.current_gap) === 'normal',
+            'text-gray-700 dark:text-gray-200': gapTier(card.top.current_gap) === 'normal',
           }"
         >
           {{ card.top.digit }}
         </span>
+
 
         <!-- Divider -->
         <div
@@ -92,13 +98,15 @@ function onCardTap(position: number) {
           :class="{
             'bg-gap-high/20': gapTier(card.top.current_gap) === 'high',
             'bg-gap-mid/20': gapTier(card.top.current_gap) === 'mid',
-            'bg-white/[0.08]': gapTier(card.top.current_gap) === 'normal',
+            'bg-black/[0.05] dark:bg-white/[0.08]': gapTier(card.top.current_gap) === 'normal',
           }"
         />
 
+
         <!-- Gap info -->
         <div class="flex flex-col items-center gap-0.5">
-          <span class="text-[10px] text-gray-600 uppercase tracking-wide">遺漏</span>
+          <span class="text-[10px] text-gray-500 dark:text-gray-600 uppercase tracking-wide">遺漏</span>
+
           <span
             class="font-mono text-base font-bold tabular-nums leading-none"
             :class="{
@@ -112,9 +120,10 @@ function onCardTap(position: number) {
         </div>
 
         <!-- Tap hint -->
-        <span class="text-[9px] text-gray-600 leading-none">
+        <span class="text-[9px] text-gray-400 dark:text-gray-600 leading-none">
           {{ activeCard === card.position ? '收起' : '點擊展開' }}
         </span>
+
 
         <!-- Per-card popover -->
         <Transition
@@ -127,18 +136,21 @@ function onCardTap(position: number) {
         >
           <div
             v-if="activeCard === card.position"
-            class="absolute z-50 top-full left-1/2 -translate-x-1/2 mt-2 card-popover glass rounded-xl border border-white/[0.08] shadow-2xl shadow-black/40 p-3 w-[260px]"
+            class="absolute z-50 top-full left-1/2 -translate-x-1/2 mt-2 card-popover glass bg-white/95 dark:bg-base-900/95 rounded-xl border border-gray-200 dark:border-white/[0.08] shadow-2xl shadow-black/10 dark:shadow-black/40 p-3 w-[260px]"
             @click.stop
           >
+
             <!-- Last seen info for this position's most omitted digit -->
-            <div class="mb-2 pb-2 border-b border-white/[0.06] text-center">
+            <div class="mb-2 pb-2 border-b border-gray-100 dark:border-white/[0.06] text-center">
+
               <div class="text-[10px] text-gray-500 tracking-wide mb-1">
                 第{{ card.position }}球 · 數字
                 <span class="font-mono font-bold text-accent">{{ card.top.digit }}</span>
                 最後開出
               </div>
-              <span class="font-mono text-sm text-gray-300">{{ card.top.last_seen_period ?? '—' }}</span>
+              <span class="font-mono text-sm text-gray-600 dark:text-gray-300">{{ card.top.last_seen_period ?? '—' }}</span>
             </div>
+
 
             <!-- Popover header -->
             <div class="text-[10px] text-gray-500 uppercase tracking-wide mb-2 text-center">
@@ -151,23 +163,26 @@ function onCardTap(position: number) {
                 v-for="d in card.allDigits"
                 :key="d.digit"
                 class="flex items-center gap-1.5 py-0.5 rounded px-1 transition-colors"
-                :class="d.digit === card.top.digit ? 'bg-accent/10' : 'hover:bg-white/[0.03]'"
+                :class="d.digit === card.top.digit ? 'bg-accent/10' : 'hover:bg-gray-100 dark:hover:bg-white/[0.03]'"
               >
+
                 <span
                   v-if="d.last_seen_period"
-                  class="font-mono text-[9px] text-gray-600 w-[72px] text-right truncate"
+                  class="font-mono text-[9px] text-gray-400 dark:text-gray-600 w-[72px] text-right truncate"
                   :title="d.last_seen_period"
                 >
                   {{ d.last_seen_period }}
                 </span>
-                <span v-else class="font-mono text-[9px] text-gray-700 w-[72px] text-right">—</span>
+                <span v-else class="font-mono text-[9px] text-gray-300 dark:text-gray-700 w-[72px] text-right">—</span>
+
                 <span
                   class="font-mono text-xs font-bold w-4 text-center"
                   :class="gapClass(d.current_gap)"
                 >
                   {{ d.digit }}
                 </span>
-                <div class="flex-1 h-1 rounded-full bg-base-700 overflow-hidden">
+                <div class="flex-1 h-1 rounded-full bg-gray-100 dark:bg-base-700 overflow-hidden">
+
                   <div
                     class="h-full rounded-full transition-all duration-300"
                     :class="

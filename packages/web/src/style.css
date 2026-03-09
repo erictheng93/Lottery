@@ -16,8 +16,13 @@
 
 @layer components {
   .glass {
-    background: rgba(15, 18, 24, 0.85);
+    background: rgba(255, 255, 255, 0.7);
     backdrop-filter: blur(20px) saturate(1.4);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+  }
+
+  .dark .glass {
+    background: rgba(15, 18, 24, 0.85);
     border: 1px solid rgba(255, 255, 255, 0.06);
   }
 }
@@ -33,8 +38,12 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideUp {

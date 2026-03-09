@@ -5,6 +5,8 @@ import GameSelector from '@/components/GameSelector.vue';
 import StatsBar from '@/components/StatsBar.vue';
 import OmissionCards from '@/components/OmissionCards.vue';
 import DrawTable from '@/components/DrawTable.vue';
+import ThemeToggle from '@/components/ThemeToggle.vue';
+
 
 const DEFAULT_GAME = 'wg539b';
 
@@ -41,25 +43,30 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-base-950">
-    <div class="fixed inset-0 pointer-events-none bg-gradient-to-b from-accent/[0.02] via-transparent to-transparent" />
+  <div class="min-h-screen bg-gray-50 dark:bg-base-950 text-gray-800 dark:text-gray-200 transition-colors duration-300">
+    <div class="hidden md:block fixed inset-0 pointer-events-none bg-gradient-to-b from-accent/[0.05] via-transparent to-transparent dark:from-accent/[0.02]" />
 
-    <div class="relative max-w-3xl mx-auto px-4 py-6 space-y-4">
-      <header class="flex items-center gap-3 mb-2">
-        <div class="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center">
-          <svg class="w-4 h-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" />
-          </svg>
+    <div class="relative max-w-3xl mx-auto px-2 md:px-4 py-4 md:py-6 space-y-3 md:space-y-4">
+
+      <header class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center">
+            <svg class="w-4 h-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" />
+            </svg>
+          </div>
+          <div>
+            <GameSelector
+              v-if="games.length > 0"
+              v-model="currentGame"
+              :games="games"
+            />
+            <p class="text-xs text-gray-400 dark:text-gray-600 mt-0.5">即時開獎統計</p>
+          </div>
         </div>
-        <div>
-          <GameSelector
-            v-if="games.length > 0"
-            v-model="currentGame"
-            :games="games"
-          />
-          <p class="text-xs text-gray-600 mt-0.5">即時開獎統計</p>
-        </div>
+        <ThemeToggle />
       </header>
+
 
       <StatsBar :game="currentGame" />
       <OmissionCards :game="currentGame" />

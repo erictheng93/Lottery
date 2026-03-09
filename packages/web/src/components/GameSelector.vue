@@ -15,7 +15,7 @@ const emit = defineEmits<{
   <select
     :value="modelValue"
     @change="emit('update:modelValue', ($event.target as HTMLSelectElement).value)"
-    class="bg-base-800 text-gray-200 text-sm font-bold rounded-lg border border-white/[0.08]
+    class="bg-gray-100 dark:bg-base-800 text-gray-800 dark:text-gray-200 text-sm font-bold rounded-lg border border-gray-200 dark:border-white/[0.08]
            px-3 py-1.5 pr-8 appearance-none cursor-pointer
            hover:border-accent/30 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/30
            transition-all duration-200"
@@ -25,9 +25,10 @@ const emit = defineEmits<{
       v-for="g in games"
       :key="g.id"
       :value="g.id"
-      class="bg-base-900 text-gray-200"
+      class="bg-white dark:bg-base-900 text-gray-800 dark:text-gray-200"
     >
       {{ g.name }}
     </option>
   </select>
+
 </template>

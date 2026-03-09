@@ -29,8 +29,8 @@ const topOmission = computed(() => {
     </span>
 
     <template v-if="data && topOmission">
-      <span class="text-sm text-gray-400">遺漏最大</span>
-      <span class="text-sm text-gray-500">
+      <span class="text-sm text-gray-400 dark:text-gray-400">遺漏最大</span>
+      <span class="text-sm text-gray-500 dark:text-gray-500">
         第{{ topOmission.position }}球
       </span>
       <span class="font-mono font-bold text-lg tabular-nums" :class="
@@ -42,12 +42,13 @@ const topOmission = computed(() => {
       ">
         {{ topOmission.digit }}
       </span>
-      <span class="text-sm text-gray-500">
+      <span class="text-sm text-gray-500 dark:text-gray-500">
         已
-        <span class="font-mono font-semibold text-gray-300">{{ topOmission.gap }}</span>
+        <span class="font-mono font-semibold text-gray-700 dark:text-gray-300">{{ topOmission.gap }}</span>
         期未出現
       </span>
     </template>
+
     <template v-else-if="loading">
       <span class="text-sm text-gray-500">載入中...</span>
     </template>
