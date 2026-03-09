@@ -1,4 +1,4 @@
-import type { Env } from './types';
+import { findGame, DEFAULT_GAME_ID, type Env } from './types';
 
 interface DrawRow {
   period_id: string;
@@ -15,7 +15,7 @@ interface DigitStats {
 
 interface PositionStats {
   position: number;
-  details: DigitStats[]; // sorted by current_gap desc
+  details: DigitStats[];
 }
 
 export interface StatsResult {
@@ -34,30 +34,22 @@ export function parseRange(raw: string | undefined): number {
   return 100;
 }
 
-/**
- * Compute per-position stats.
- * Each position (0-4 → num1-num5) is tracked independently.
- * For each position, only one digit appears per draw, so we track
- * frequency, current_gap, max_gap, last_seen_period for digits 0-9.
- */
-function computeStats(draws: DrawRow[]): PositionStats[] {
+function computeStats(draws: DrawRow[], numCount: number): PositionStats[] {
   const positions: PositionStats[] = [];
 
-  for (let pos = 0; pos < 5; pos++) {
+  for (let pos = 0; pos < numCount; pos++) {
     const frequency = new Array(10).fill(0);
     const currentGap = new Array(10).fill(-1);
     const maxGap = new Array(10).fill(0);
     const streak = new Array(10).fill(0);
     const lastSeenPeriod: (string | null)[] = new Array(10).fill(null);
 
-    // draws[0] is most recent, iterate newest → oldest
     for (let i = 0; i < draws.length; i++) {
       const allDigits = draws[i].digits.split(',').map(Number);
-      const d = allDigits[pos]; // single digit for this position
+      const d = allDigits[pos];
 
       frequency[d]++;
 
-      // Update the seen digit
       if (currentGap[d] === -1) {
         currentGap[d] = i;
         lastSeenPeriod[d] = draws[i].period_id;
@@ -67,7 +59,6 @@ function computeStats(draws: DrawRow[]): PositionStats[] {
       }
       streak[d] = 0;
 
-      // Increment streak for all other digits
       for (let other = 0; other < 10; other++) {
         if (other !== d) {
           streak[other]++;
@@ -75,7 +66,6 @@ function computeStats(draws: DrawRow[]): PositionStats[] {
       }
     }
 
-    // Finalize
     const details: DigitStats[] = [];
     for (let d = 0; d < 10; d++) {
       if (currentGap[d] === -1) {
@@ -93,18 +83,19 @@ function computeStats(draws: DrawRow[]): PositionStats[] {
       });
     }
 
-    // Sort by current_gap descending
     details.sort((a, b) => b.current_gap - a.current_gap);
-
     positions.push({ position: pos + 1, details });
   }
 
   return positions;
 }
 
-export async function getStats(env: Env, range: number): Promise<StatsResult> {
+export async function getStats(env: Env, gameId: string, range: number): Promise<StatsResult> {
+  const game = findGame(gameId);
+  const numCount = game?.numCount ?? 5;
+
   // 1. Check cache
-  const cacheKey = `omission_${range}`;
+  const cacheKey = `${gameId}_omission_${range}`;
   const cached = await env.DB.prepare(
     'SELECT value, expires_at FROM stats_cache WHERE key = ?'
   )
@@ -117,13 +108,13 @@ export async function getStats(env: Env, range: number): Promise<StatsResult> {
 
   // 2. Compute fresh
   const draws = await env.DB.prepare(
-    'SELECT period_id, digits FROM draw_results ORDER BY period_id DESC LIMIT ?'
+    'SELECT period_id, digits FROM draw_results WHERE game_id = ? ORDER BY period_id DESC LIMIT ?'
   )
-    .bind(range)
+    .bind(gameId, range)
     .all<DrawRow>();
 
   const rows = draws.results;
-  const positions = computeStats(rows);
+  const positions = computeStats(rows, numCount);
 
   const result: StatsResult = {
     positions,
