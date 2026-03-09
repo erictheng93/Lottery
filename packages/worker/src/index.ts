@@ -1,17 +1,29 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import type { Env } from './types';
-import { scrape, backfill } from './scraper';
+import { GAMES, DEFAULT_GAME_ID, findGame, type Env } from './types';
+import { scrapeAll, backfill } from './scraper';
 import { getStats, parseRange } from './stats';
 
 const app = new Hono<{ Bindings: Env }>();
 
 app.use('/api/*', cors());
 
+function resolveGameId(raw: string | undefined): string {
+  if (!raw) return DEFAULT_GAME_ID;
+  const game = findGame(raw);
+  return game ? game.id : DEFAULT_GAME_ID;
+}
+
+app.get('/api/games', (c) => {
+  return c.json(
+    GAMES.map((g) => ({ id: g.id, name: g.name, numCount: g.numCount }))
+  );
+});
+
 app.get('/api/health', async (c) => {
   const latest = await c.env.DB.prepare(
-    'SELECT period_id, created_at FROM draw_results ORDER BY period_id DESC LIMIT 1'
-  ).first<{ period_id: string; created_at: string }>();
+    'SELECT game_id, period_id, created_at FROM draw_results ORDER BY created_at DESC LIMIT 1'
+  ).first<{ game_id: string; period_id: string; created_at: string }>();
 
   const totalResult = await c.env.DB.prepare(
     'SELECT COUNT(*) as count FROM draw_results'
@@ -34,6 +46,8 @@ app.get('/api/health', async (c) => {
 
   return c.json({
     status: 'ok',
+    games_count: GAMES.length,
+    last_game: latest?.game_id ?? null,
     last_period: latest?.period_id ?? null,
     last_scrape_time: latest?.created_at ?? null,
     total_records: totalResult?.count ?? 0,
@@ -42,21 +56,23 @@ app.get('/api/health', async (c) => {
 });
 
 app.get('/api/stats', async (c) => {
+  const gameId = resolveGameId(c.req.query('game'));
   const range = parseRange(c.req.query('range'));
-  const result = await getStats(c.env, range);
+  const result = await getStats(c.env, gameId, range);
   return c.json(result);
 });
 
 app.get('/api/draws', async (c) => {
+  const gameId = resolveGameId(c.req.query('game'));
   const limit = Math.min(Math.max(Number(c.req.query('limit')) || 30, 1), 100);
   const offset = Math.max(Number(c.req.query('offset')) || 0, 0);
-  const date = c.req.query('date'); // YYYY-MM-DD or undefined
+  const date = c.req.query('date');
 
-  let whereClause = '';
-  const params: (string | number)[] = [];
+  let whereClause = 'WHERE game_id = ?';
+  const params: (string | number)[] = [gameId];
 
   if (date) {
-    whereClause = 'WHERE period_id LIKE ?';
+    whereClause += ' AND period_id LIKE ?';
     params.push(date.replace(/-/g, '') + '%');
   }
 
@@ -69,7 +85,7 @@ app.get('/api/draws', async (c) => {
   const total = countResult?.count ?? 0;
 
   const rows = await c.env.DB.prepare(
-    `SELECT period_id, draw_time, num1, num2, num3, num4, num5, digits
+    `SELECT period_id, draw_time, numbers, digits
      FROM draw_results ${whereClause}
      ORDER BY period_id DESC LIMIT ? OFFSET ?`
   )
@@ -77,18 +93,14 @@ app.get('/api/draws', async (c) => {
     .all<{
       period_id: string;
       draw_time: string;
-      num1: number;
-      num2: number;
-      num3: number;
-      num4: number;
-      num5: number;
+      numbers: string;
       digits: string;
     }>();
 
   const draws = rows.results.map((r) => ({
     period_id: r.period_id,
     draw_time: r.draw_time,
-    numbers: [r.num1, r.num2, r.num3, r.num4, r.num5],
+    numbers: JSON.parse(r.numbers) as number[],
     digits: r.digits.split(',').map(Number),
   }));
 
@@ -100,14 +112,19 @@ app.get('/api/draws', async (c) => {
 });
 
 app.get('/api/trigger-scrape', async (c) => {
-  await scrape(c.env);
-  return c.json({ triggered: true });
+  await scrapeAll(c.env);
+  return c.json({ triggered: true, games: GAMES.length });
 });
 
 app.get('/api/trigger-backfill', async (c) => {
+  const gameId = resolveGameId(c.req.query('game'));
+  const game = findGame(gameId);
+  if (!game) {
+    return c.json({ error: `Unknown game: ${gameId}` }, 400);
+  }
   const range = Number(c.req.query('range')) || 100;
   const clamped = Math.min(Math.max(range, 30), 100);
-  const result = await backfill(c.env, clamped);
+  const result = await backfill(c.env, game, clamped);
   return c.json(result);
 });
 
@@ -118,6 +135,6 @@ export default {
     env: Env,
     ctx: ExecutionContext
   ): Promise<void> {
-    ctx.waitUntil(scrape(env));
+    ctx.waitUntil(scrapeAll(env));
   },
 };
