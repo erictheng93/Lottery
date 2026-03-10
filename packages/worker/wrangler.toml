@@ -16,3 +16,4 @@ id = "placeholder-replace-with-actual-id"
 
 [vars]
 SOURCE_BASE_URL = "https://open-lat.inja777.com"
+ENVIRONMENT = "production"

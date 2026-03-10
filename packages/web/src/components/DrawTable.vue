@@ -3,7 +3,24 @@ import { toRef } from 'vue';
 import { useDraws } from '@/composables/useDraws';
 
 const props = defineProps<{ game: string }>();
-const { draws, total, hasMore, offset, loading, error, reload, prevPage, nextPage } = useDraws(toRef(props, 'game'));
+const { draws, total, hasMore, offset, loading, error, reload, currentPage, totalPages, prevPage, nextPage, goToPage } = useDraws(toRef(props, 'game'));
+
+/** Build a compact list of page numbers with ellipsis gaps */
+function visiblePages(): (number | '...')[] {
+  const tp = totalPages.value;
+  const cp = currentPage.value;
+  if (tp <= 7) return Array.from({ length: tp }, (_, i) => i + 1);
+
+  const pages: (number | '...')[] = [1];
+  const start = Math.max(2, cp - 1);
+  const end = Math.min(tp - 1, cp + 1);
+
+  if (start > 2) pages.push('...');
+  for (let i = start; i <= end; i++) pages.push(i);
+  if (end < tp - 1) pages.push('...');
+  pages.push(tp);
+  return pages;
+}
 
 // Each digit 0-9 gets a unique background color with contrasting text
 const digitStyles: Record<number, string> = {
@@ -12,7 +29,7 @@ const digitStyles: Record<number, string> = {
   2: 'bg-amber-500 ring-amber-400/30 text-white',
   3: 'bg-yellow-400 ring-yellow-300/30 text-gray-900',
   4: 'bg-green-500 ring-green-400/30 text-white',
-  5: 'bg-teal-500 ring-teal-400/30 text-white',
+  5: 'bg-gray-500 ring-gray-400/30 text-white',
   6: 'bg-cyan-500 ring-cyan-400/30 text-white',
   7: 'bg-blue-500 ring-blue-400/30 text-white',
   8: 'bg-purple-500 ring-purple-400/30 text-white',
@@ -42,26 +59,52 @@ function formatTime(iso: string): string {
         <span class="text-gray-500 dark:text-gray-600 font-normal ml-1.5">{{ total }} 筆</span>
       </h2>
 
-      <div class="flex items-center gap-2 text-xs">
+      <div class="flex items-center gap-1 sm:gap-1.5 text-xs">
+        <!-- Prev -->
         <button
           @click="prevPage"
           :disabled="offset === 0"
-          class="px-3 py-2 sm:py-1.5 rounded-md font-medium transition-all duration-200 min-h-[44px] sm:min-h-0 flex items-center
+          class="w-8 h-8 sm:w-7 sm:h-7 rounded-md font-medium transition-all duration-200 flex items-center justify-center
                  disabled:text-gray-300 dark:disabled:text-gray-700 disabled:cursor-not-allowed
-                 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-base-700
+                 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-base-700
                  active:bg-gray-200 dark:active:bg-base-600"
+          title="上一頁"
         >
-          上一頁
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
         </button>
+
+        <!-- Page numbers -->
+        <template v-for="(p, i) in visiblePages()" :key="i">
+          <span v-if="p === '...'" class="w-6 text-center text-gray-400 dark:text-gray-600 select-none">…</span>
+          <button
+            v-else
+            @click="goToPage(p)"
+            :class="[
+              'w-8 h-8 sm:w-7 sm:h-7 rounded-md font-medium tabular-nums transition-all duration-200 flex items-center justify-center',
+              p === currentPage
+                ? 'bg-accent text-white shadow-sm shadow-accent/25'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-base-700 active:bg-gray-200 dark:active:bg-base-600'
+            ]"
+          >
+            {{ p }}
+          </button>
+        </template>
+
+        <!-- Next -->
         <button
           @click="nextPage"
           :disabled="!hasMore"
-          class="px-3 py-2 sm:py-1.5 rounded-md font-medium transition-all duration-200 min-h-[44px] sm:min-h-0 flex items-center
+          class="w-8 h-8 sm:w-7 sm:h-7 rounded-md font-medium transition-all duration-200 flex items-center justify-center
                  disabled:text-gray-300 dark:disabled:text-gray-700 disabled:cursor-not-allowed
-                 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-base-700
+                 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-base-700
                  active:bg-gray-200 dark:active:bg-base-600"
+          title="下一頁"
         >
-          下一頁
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
         </button>
       </div>
     </div>

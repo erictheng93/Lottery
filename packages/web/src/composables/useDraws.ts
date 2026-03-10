@@ -1,7 +1,8 @@
-import { ref, watch, onMounted, type Ref } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, type Ref } from 'vue';
 import { fetchDraws, type DrawsResponse } from '@/api';
 
 const PAGE_SIZE = 30;
+const POLL_INTERVAL = 30_000;
 
 export function useDraws(game: Ref<string>) {
   const draws = ref<DrawsResponse['draws']>([]);
@@ -10,6 +11,11 @@ export function useDraws(game: Ref<string>) {
   const offset = ref(0);
   const loading = ref(false);
   const error = ref<string | null>(null);
+
+  let timer: ReturnType<typeof setInterval> | null = null;
+
+  const currentPage = computed(() => Math.floor(offset.value / PAGE_SIZE) + 1);
+  const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)));
 
   async function load() {
     loading.value = true;
@@ -26,6 +32,29 @@ export function useDraws(game: Ref<string>) {
     }
   }
 
+  function startPolling() {
+    stopPolling();
+    timer = setInterval(() => {
+      if (offset.value === 0) load();
+    }, POLL_INTERVAL);
+  }
+
+  function stopPolling() {
+    if (timer) {
+      clearInterval(timer);
+      timer = null;
+    }
+  }
+
+  function onVisibilityChange() {
+    if (document.hidden) {
+      stopPolling();
+    } else {
+      if (offset.value === 0) load();
+      startPolling();
+    }
+  }
+
   function prevPage() {
     if (offset.value <= 0) return;
     offset.value = Math.max(0, offset.value - PAGE_SIZE);
@@ -38,13 +67,28 @@ export function useDraws(game: Ref<string>) {
     load();
   }
 
+  function goToPage(page: number) {
+    if (page < 1 || page > totalPages.value) return;
+    offset.value = (page - 1) * PAGE_SIZE;
+    load();
+  }
+
   watch(game, () => {
     offset.value = 0;
     draws.value = [];
     load();
   });
 
-  onMounted(() => load());
+  onMounted(() => {
+    load();
+    startPolling();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+  });
 
-  return { draws, total, hasMore, offset, loading, error, prevPage, nextPage, reload: load };
+  onUnmounted(() => {
+    stopPolling();
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+  });
+
+  return { draws, total, hasMore, offset, loading, error, currentPage, totalPages, prevPage, nextPage, goToPage, reload: load };
 }

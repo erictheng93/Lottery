@@ -111,6 +111,14 @@ app.get('/api/draws', async (c) => {
   });
 });
 
+// Dev-only endpoints — blocked in production via ENVIRONMENT env var
+app.use('/api/trigger-*', async (c, next) => {
+  if (c.env.ENVIRONMENT !== 'dev') {
+    return c.json({ error: 'Not available in production' }, 403);
+  }
+  await next();
+});
+
 app.get('/api/trigger-scrape', async (c) => {
   await scrapeAll(c.env);
   return c.json({ triggered: true, games: GAMES.length });

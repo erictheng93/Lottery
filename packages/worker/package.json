@@ -2,7 +2,7 @@
   "name": "worker",
   "private": true,
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --test-scheduled",
     "deploy": "wrangler deploy",
     "db:init:local": "wrangler d1 execute lottery-db --local --file=src/db/schema.sql",
     "db:migrate:local": "wrangler d1 execute lottery-db --local --file=src/db/migrate-v2.sql"

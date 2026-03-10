@@ -24,6 +24,7 @@ export interface Env {
   DB: D1Database;
   CSRF_CACHE: KVNamespace;
   SOURCE_BASE_URL: string;
+  ENVIRONMENT: string;
 }
 
 export interface AjaxInfoResponse {
