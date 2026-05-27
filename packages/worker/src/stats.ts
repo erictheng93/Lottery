@@ -36,6 +36,16 @@ export function parseRange(raw: string | undefined): number {
 
 function computeStats(draws: DrawRow[], numCount: number): PositionStats[] {
   const positions: PositionStats[] = [];
+  const normalizedDigits = draws.map((draw) =>
+    draw.digits.split(',').map((value) => {
+      const trimmed = value.trim();
+      if (trimmed.length === 0) {
+        return null;
+      }
+      const n = Number(trimmed);
+      return Number.isInteger(n) && n >= 0 && n <= 9 ? n : null;
+    })
+  );
 
   for (let pos = 0; pos < numCount; pos++) {
     const frequency = new Array(10).fill(0);
@@ -45,8 +55,14 @@ function computeStats(draws: DrawRow[], numCount: number): PositionStats[] {
     const lastSeenPeriod: (string | null)[] = new Array(10).fill(null);
 
     for (let i = 0; i < draws.length; i++) {
-      const allDigits = draws[i].digits.split(',').map(Number);
-      const d = allDigits[pos];
+      const d = normalizedDigits[i][pos];
+
+      if (d === null || d === undefined) {
+        for (let other = 0; other < 10; other++) {
+          streak[other]++;
+        }
+        continue;
+      }
 
       frequency[d]++;
 

@@ -93,7 +93,14 @@ async function scrapeOneGame(env: Env, game: GameConfig, csrf: CsrfData): Promis
   }
 
   const data: AjaxInfoResponse = await res.json();
-  const periodId = data.nowPeriod;
+  const periodId = data.nowPeriod.trim();
+
+  // Upstream returns a sentinel payload ({nowPeriod:"", openlotNumber:[], donePeriod:999, ...})
+  // for games that are offline or no longer exist. Skip without writing draw_results.
+  if (!periodId || !Array.isArray(data.openlotNumber) || data.openlotNumber.length === 0) {
+    return { game, status: 'skip', periodId: null, message: 'Empty payload (game offline)' };
+  }
+
   const numbers = data.openlotNumber.map(Number);
   const digits = numbers.map((n) => n % 10);
 
@@ -274,7 +281,11 @@ export async function backfill(env: Env, game: GameConfig, range: number): Promi
   let errors = 0;
 
   for (const item of items) {
-    const periodId = item.preDrawIssue;
+    const periodId = item.preDrawIssue.trim();
+    if (!periodId || !Array.isArray(item.preDrawCode) || item.preDrawCode.length === 0) {
+      skipped++;
+      continue;
+    }
     const numbers = item.preDrawCode.map(Number);
     const digits = numbers.map((n) => n % 10);
     const drawTime = item.preDrawTime.replace('<br>', 'T');
