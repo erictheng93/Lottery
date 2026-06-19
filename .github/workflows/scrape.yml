@@ -1,0 +1,24 @@
+name: scrape
+
+on:
+  schedule:
+    - cron: '*/5 * * * *' # GitHub Actions minimum is 5 min; timing is best-effort
+  workflow_dispatch: {}
+
+# Avoid overlapping runs if a tick is delayed
+concurrency:
+  group: scrape
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node scripts/scrape-ci.mjs
+        env:
+          WORKER_URL: https://lottery-worker.omfg.workers.dev
+          INGEST_TOKEN: ${{ secrets.INGEST_TOKEN }}

@@ -1,12 +1,10 @@
 import { Hono } from 'hono';
-import { cors } from 'hono/cors';
-import { GAMES, DEFAULT_GAME_ID, findGame, type Env } from './types';
-import { scrapeAll, backfill } from './scraper';
+import { GAMES, DEFAULT_GAME_ID, findGame, type Env, type InitListItem } from './types';
+import { scrapeAll, backfill, insertDraws } from './scraper';
 import { getStats, parseRange } from './stats';
 
+// ponytail: SPA + API served from one Worker (same origin) → no CORS needed
 const app = new Hono<{ Bindings: Env }>();
-
-app.use('/api/*', cors());
 
 function resolveGameId(raw: string | undefined): string {
   if (!raw) return DEFAULT_GAME_ID;
@@ -109,6 +107,32 @@ app.get('/api/draws', async (c) => {
     total,
     has_more: offset + limit < total,
   });
+});
+
+// Ingest — CI (GitHub Actions, non-Cloudflare IP) fetches the source and POSTs the raw
+// initlist here; the source's bot management blocks the Worker's own egress, so the
+// scrape must originate off-Workers. Bearer-token protected.
+app.post('/api/ingest', async (c) => {
+  const token = c.env.INGEST_TOKEN;
+  if (!token || c.req.header('Authorization') !== `Bearer ${token}`) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  const body = await c.req.json<{ game_id: string; initlist: string }>().catch(() => null);
+  if (!body) return c.json({ error: 'Invalid JSON body' }, 400);
+
+  const game = findGame(body.game_id);
+  if (!game) return c.json({ error: `Unknown game: ${body.game_id}` }, 400);
+
+  let items: InitListItem[];
+  try {
+    items = JSON.parse(body.initlist);
+  } catch {
+    return c.json({ error: 'initlist is not valid JSON' }, 400);
+  }
+
+  const result = await insertDraws(c.env, game.id, items);
+  return c.json(result);
 });
 
 // Dev-only endpoints — blocked in production via ENVIRONMENT env var

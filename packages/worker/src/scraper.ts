@@ -4,11 +4,21 @@ const CSRF_KV_KEY = 'csrf_data';
 const CSRF_TTL_SECONDS = 600;
 const FETCH_TIMEOUT_MS = 15_000;
 
+// Browser-like headers — source is behind Cloudflare Bot Management; a bare Workers
+// fetch (no User-Agent) scores as a bot and gets challenged/403'd. ponytail: headers
+// only; if this still gets blocked the real fix is egressing off Workers' IP range.
+const BROWSER_HEADERS = {
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.8',
+};
+
 // --- CSRF Management ---
 
 async function fetchCsrfFromSource(env: Env): Promise<CsrfData> {
   const url = `${env.SOURCE_BASE_URL}/nowopen/${GAMES[0].playkey}`;
-  const res = await fetch(url);
+  const res = await fetch(url, { headers: BROWSER_HEADERS });
   const html = await res.text();
 
   const tokenMatch = html.match(/id="_token"[^>]*value="([^"]+)"/);
@@ -76,6 +86,7 @@ async function scrapeOneGame(env: Env, game: GameConfig, csrf: CsrfData): Promis
     {
       method: 'POST',
       headers: {
+        ...BROWSER_HEADERS,
         'Content-Type': 'application/x-www-form-urlencoded',
         Cookie: csrf.cookie,
         'X-Requested-With': 'XMLHttpRequest',
@@ -85,8 +96,9 @@ async function scrapeOneGame(env: Env, game: GameConfig, csrf: CsrfData): Promis
     FETCH_TIMEOUT_MS
   );
 
-  if (res.status === 419) {
-    return { game, status: 'csrf_expired', periodId: null, message: 'CSRF token expired (419)' };
+  // Source returns 403 (not just 419) for stale/invalid CSRF → treat both as expired and retry with a fresh token
+  if (res.status === 419 || res.status === 403) {
+    return { game, status: 'csrf_expired', periodId: null, message: `CSRF token expired (${res.status})` };
   }
   if (!res.ok) {
     return { game, status: 'error', periodId: null, message: `ajax_info returned ${res.status}` };
@@ -245,6 +257,7 @@ export async function backfill(env: Env, game: GameConfig, range: number): Promi
       {
         method: 'POST',
         headers: {
+          ...BROWSER_HEADERS,
           'Content-Type': 'application/x-www-form-urlencoded',
           Cookie: c.cookie,
           'X-Requested-With': 'XMLHttpRequest',
@@ -276,6 +289,21 @@ export async function backfill(env: Env, game: GameConfig, range: number): Promi
   }
 
   const items: InitListItem[] = JSON.parse(raw.initlist);
+  const result = await insertDraws(env, game.id, items);
+
+  await writeScrapeLog(
+    env,
+    game.id,
+    'success',
+    null,
+    `Backfill range=${range}: ${result.inserted} inserted, ${result.skipped} skipped, ${result.errors} errors`
+  );
+
+  return result;
+}
+
+// Shared insert loop — used by backfill and by the /api/ingest endpoint (CI-driven scrape)
+export async function insertDraws(env: Env, gameId: string, items: InitListItem[]): Promise<BackfillResult> {
   let inserted = 0;
   let skipped = 0;
   let errors = 0;
@@ -296,7 +324,7 @@ export async function backfill(env: Env, game: GameConfig, range: number): Promi
          VALUES (?, ?, ?, ?, ?, ?)`
       )
         .bind(
-          game.id,
+          gameId,
           periodId,
           drawTime,
           JSON.stringify(numbers),
@@ -314,14 +342,6 @@ export async function backfill(env: Env, game: GameConfig, range: number): Promi
       errors++;
     }
   }
-
-  await writeScrapeLog(
-    env,
-    game.id,
-    'success',
-    null,
-    `Backfill range=${range}: ${inserted} inserted, ${skipped} skipped, ${errors} errors`
-  );
 
   return { inserted, skipped, errors, total: items.length };
 }
