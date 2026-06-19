@@ -1,0 +1,10 @@
+services:
+  lottery-scraper:
+    build:
+      context: ../..
+      dockerfile: packages/scraper/Dockerfile
+    image: lottery-scraper:latest
+    container_name: lottery-scraper
+    restart: unless-stopped
+    env_file:
+      - .env

@@ -5,7 +5,11 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun run --filter worker dev",
-    "db:init:local": "bun run --filter worker db:init:local"
+    "dev": "bun run --filter web pages:dev",
+    "web:dev": "bun run --filter web dev",
+    "pages:deploy": "bun run --filter web deploy",
+    "db:init:local": "bun run --filter web db:init:local",
+    "db:init:remote": "bun run --filter web db:init:remote",
+    "test": "bun test packages/core packages/scraper"
   }
 }

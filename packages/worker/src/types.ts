@@ -25,7 +25,6 @@ export interface Env {
   CSRF_CACHE: KVNamespace;
   SOURCE_BASE_URL: string;
   ENVIRONMENT: string;
-  INGEST_TOKEN?: string; // secret (wrangler secret put) — auth for CI-driven /api/ingest
 }
 
 export interface AjaxInfoResponse {

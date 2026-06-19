@@ -1,0 +1,13 @@
+services:
+  lottery-scraper:
+    build:
+      context: ../..
+      dockerfile: packages/scraper/Dockerfile
+    restart: unless-stopped
+    environment:
+      SOURCE_BASE_URL: https://open-lat.inja777.com
+      INGEST_URL: https://your-pages-domain.example/api/internal/ingest
+      INGEST_SECRET: replace-with-a-long-random-secret
+      SCRAPE_INTERVAL_SECONDS: "60"
+      BACKFILL_RANGE: "5"
+      FETCH_TIMEOUT_MS: "15000"

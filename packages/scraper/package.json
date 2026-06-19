@@ -1,0 +1,13 @@
+{
+  "name": "scraper",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "once": "bun run src/index.ts --once",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@lottery/core": "workspace:*"
+  }
+}

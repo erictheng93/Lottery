@@ -1,0 +1,8 @@
+name = "lottery-pages"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-06-19"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lottery-db"
+database_id = "9dfeb4d4-ebe7-40bd-b564-35a8e9cc1d1d"

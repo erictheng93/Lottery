@@ -6,11 +6,10 @@ compatibility_date = "2025-03-01"
 directory = "../web/dist"
 not_found_handling = "single-page-application"
 
-# Cron disabled: the source's Cloudflare bot management blocks the Worker's egress IP.
-# Scraping now runs from GitHub Actions (non-CF IP) → POST /api/ingest. See .github/workflows/scrape.yml.
-# The scheduled() handler stays in code as a fallback if the source ever stops challenging Workers.
+# Cron disabled: source rate-limits Cloudflare IPs; data is loaded via manual
+# backfill (wrangler dev --remote → /api/trigger-backfill). Re-add to resume polling.
 # [triggers]
-# crons = ["*/5 * * * *"]
+# crons = ["* * * * *"]
 
 [[d1_databases]]
 binding = "DB"

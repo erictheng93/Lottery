@@ -1,0 +1,150 @@
+import type { AppEnv } from './db';
+import { findGame } from './games';
+
+interface DrawRow {
+  period_id: string;
+  digits: string;
+}
+
+export interface DigitStats {
+  digit: number;
+  frequency: number;
+  current_gap: number;
+  max_gap: number;
+  last_seen_period: string | null;
+}
+
+export interface PositionStats {
+  position: number;
+  details: DigitStats[];
+}
+
+export interface StatsResult {
+  positions: PositionStats[];
+  total_periods: number;
+  latest_period: string | null;
+  last_update: string;
+}
+
+const VALID_RANGES = [30, 60, 100] as const;
+const CACHE_TTL_SECONDS = 60;
+
+export function parseRange(raw: string | null | undefined): number {
+  const n = Number(raw);
+  if (VALID_RANGES.includes(n as (typeof VALID_RANGES)[number])) return n;
+  return 100;
+}
+
+function computeStats(draws: DrawRow[], numCount: number): PositionStats[] {
+  const positions: PositionStats[] = [];
+  const normalizedDigits = draws.map((draw) =>
+    draw.digits.split(',').map((value) => {
+      const trimmed = value.trim();
+      if (trimmed.length === 0) return null;
+      const n = Number(trimmed);
+      return Number.isInteger(n) && n >= 0 && n <= 9 ? n : null;
+    })
+  );
+
+  for (let pos = 0; pos < numCount; pos++) {
+    const frequency = new Array<number>(10).fill(0);
+    const currentGap = new Array<number>(10).fill(-1);
+    const maxGap = new Array<number>(10).fill(0);
+    const streak = new Array<number>(10).fill(0);
+    const lastSeenPeriod = new Array<string | null>(10).fill(null);
+
+    for (let i = 0; i < draws.length; i++) {
+      const digit = normalizedDigits[i][pos];
+
+      if (digit === null || digit === undefined) {
+        for (let other = 0; other < 10; other++) {
+          streak[other]++;
+        }
+        continue;
+      }
+
+      frequency[digit]++;
+
+      if (currentGap[digit] === -1) {
+        currentGap[digit] = i;
+        lastSeenPeriod[digit] = draws[i].period_id;
+      }
+      if (streak[digit] > maxGap[digit]) {
+        maxGap[digit] = streak[digit];
+      }
+      streak[digit] = 0;
+
+      for (let other = 0; other < 10; other++) {
+        if (other !== digit) {
+          streak[other]++;
+        }
+      }
+    }
+
+    const details: DigitStats[] = [];
+    for (let digit = 0; digit < 10; digit++) {
+      if (currentGap[digit] === -1) {
+        currentGap[digit] = draws.length;
+      }
+      if (streak[digit] > maxGap[digit]) {
+        maxGap[digit] = streak[digit];
+      }
+      details.push({
+        digit,
+        frequency: frequency[digit],
+        current_gap: currentGap[digit],
+        max_gap: maxGap[digit],
+        last_seen_period: lastSeenPeriod[digit],
+      });
+    }
+
+    details.sort((a, b) => b.current_gap - a.current_gap);
+    positions.push({ position: pos + 1, details });
+  }
+
+  return positions;
+}
+
+export async function getStats(
+  env: AppEnv,
+  gameId: string,
+  range: number
+): Promise<StatsResult> {
+  const game = findGame(gameId);
+  const numCount = game?.numCount ?? 5;
+  const cacheKey = `${gameId}_omission_${range}`;
+  const cached = await env.DB.prepare(
+    'SELECT value, expires_at FROM stats_cache WHERE key = ?'
+  )
+    .bind(cacheKey)
+    .first<{ value: string; expires_at: string }>();
+
+  if (cached && new Date(cached.expires_at) > new Date()) {
+    return JSON.parse(cached.value) as StatsResult;
+  }
+
+  const draws = await env.DB.prepare(
+    'SELECT period_id, digits FROM draw_results WHERE game_id = ? ORDER BY period_id DESC LIMIT ?'
+  )
+    .bind(gameId, range)
+    .all<DrawRow>();
+
+  const rows = draws.results;
+  const result: StatsResult = {
+    positions: computeStats(rows, numCount),
+    total_periods: rows.length,
+    latest_period: rows.length > 0 ? rows[0].period_id : null,
+    last_update: new Date().toISOString(),
+  };
+
+  const expiresAt = new Date(Date.now() + CACHE_TTL_SECONDS * 1000).toISOString();
+  await env.DB.prepare(
+    `INSERT INTO stats_cache (key, value, updated_at, expires_at)
+     VALUES (?, ?, CURRENT_TIMESTAMP, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP, expires_at = excluded.expires_at`
+  )
+    .bind(cacheKey, JSON.stringify(result), expiresAt)
+    .run();
+
+  return result;
+}
