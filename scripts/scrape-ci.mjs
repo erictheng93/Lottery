@@ -35,7 +35,13 @@ async function getCsrf() {
   });
   const html = await res.text();
   const m = html.match(/id="_token"[^>]*value="([^"]+)"/);
-  if (!m) throw new Error(`CSRF _token not found (status ${res.status})`);
+  if (!m) {
+    const challenge = /challenge-platform|just a moment|cf-chl|turnstile/i.test(html);
+    console.error(
+      `[csrf] status=${res.status} cfChallenge=${challenge} len=${html.length} snippet=${JSON.stringify(html.slice(0, 200))}`
+    );
+    throw new Error(`CSRF _token not found (status ${res.status})`);
+  }
   const cookie = (res.headers.getSetCookie?.() ?? [])
     .map((c) => c.split(';')[0])
     .join('; ');
